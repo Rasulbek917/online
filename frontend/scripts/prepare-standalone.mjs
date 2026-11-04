@@ -7,10 +7,13 @@ import path from "node:path";
 
 const root = process.cwd();
 const standalone = path.join(root, ".next", "standalone");
+const server = path.join(standalone, "server.js");
 
-if (!existsSync(standalone)) {
-  console.error("Standalone build not found. Run `npm run build` first.");
-  process.exit(1);
+// Vercel's Next.js builder owns the deployment output and does not emit the
+// standalone server, so copying it there would fail the build.
+if (process.env.VERCEL || !existsSync(server)) {
+  console.log("Vercel/Next managed build detected; skipping standalone preparation.");
+  process.exit(0);
 }
 
 const staticSource = path.join(root, ".next", "static");
@@ -26,6 +29,5 @@ if (existsSync(publicSource)) {
   });
 }
 
-const target = path.join(standalone, "server.js");
-const info = await stat(target);
-console.log(`Standalone server ready (${info.size} bytes): ${target}`);
+const info = await stat(server);
+console.log(`Standalone server ready (${info.size} bytes): ${server}`);
