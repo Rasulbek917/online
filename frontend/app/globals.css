@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 33% 98%;
+    --foreground: 224 40% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 40% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 40% 12%;
+    --primary: 234 85% 59%;
+    --primary-foreground: 0 0% 100%;
+    --brand-2: 268 80% 62%;
+    --secondary: 220 24% 94%;
+    --secondary-foreground: 224 30% 22%;
+    --muted: 220 24% 94%;
+    --muted-foreground: 220 12% 44%;
+    --accent: 234 85% 95%;
+    --accent-foreground: 234 60% 38%;
+    --destructive: 0 74% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 88%;
+    --input: 220 20% 86%;
+    --ring: 234 85% 59%;
+    --gold: 41 62% 44%;
+    --gold-foreground: 0 0% 100%;
+    --shadow: 224 40% 30%;
+    --radius: 0.85rem;
+  }
+
+  .dark {
+    --background: 224 47% 6%;
+    --foreground: 216 30% 94%;
+    --card: 224 40% 9%;
+    --card-foreground: 216 30% 94%;
+    --popover: 224 42% 8%;
+    --popover-foreground: 216 30% 94%;
+    --primary: 238 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --brand-2: 268 84% 70%;
+    --secondary: 224 32% 14%;
+    --secondary-foreground: 216 25% 88%;
+    --muted: 224 30% 13%;
+    --muted-foreground: 220 14% 64%;
+    --accent: 236 42% 18%;
+    --accent-foreground: 228 65% 82%;
+    --destructive: 0 70% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 28% 18%;
+    --input: 222 28% 20%;
+    --ring: 238 84% 67%;
+    --gold: 41 58% 57%;
+    --gold-foreground: 224 47% 8%;
+    --shadow: 0 0% 0%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    @apply bg-primary/25 text-foreground;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-tight;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-solid border-transparent bg-muted-foreground/30 bg-clip-content;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-2xl border border-border/80 bg-card/80 backdrop-blur-sm;
+  }
+
+  .surface-hover {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-soft;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-brand-2 to-primary bg-clip-text text-transparent;
+    background-size: 200% auto;
+  }
+
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 40%, transparent 100%);
+  }
+
+  .ring-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.25),
+      0 24px 70px -30px hsl(var(--primary) / 0.55);
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-muted;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-foreground/5 to-transparent;
+  }
+
+  .prose-academy {
+    @apply text-[15px] leading-7 text-muted-foreground;
+  }
+  .prose-academy p + p {
+    @apply mt-4;
+  }
+  .prose-academy strong {
+    @apply font-semibold text-foreground;
+  }
+  .prose-academy ul {
+    @apply mt-3 list-disc space-y-2 pl-6;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
