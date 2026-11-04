@@ -1,11 +1,12 @@
 import base64
 import binascii
+import os
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
 
-from django.conf import settings
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.utils import timezone
 from PIL import Image
 from rest_framework import serializers
@@ -47,17 +48,29 @@ def image_from_url(value):
     if not value:
         return None
     path = urlparse(value).path
-    media_url = settings.MEDIA_URL or "/media/"
-    if media_url not in path:
+    media_url = "/media/"
+    if media_url in path:
+        relative = path.split(media_url, 1)[1]
+    else:
+        # Object storage URLs put the key in the path (optionally after the bucket).
+        relative = path.lstrip("/")
+        bucket = os.getenv("AWS_STORAGE_BUCKET_NAME", "")
+        if bucket and relative.startswith(f"{bucket}/"):
+            relative = relative[len(bucket) + 1 :]
+    if not relative or ".." in Path(relative).parts:
         raise serializers.ValidationError("Existing image URL is not a media file.")
-    relative = path.split(media_url, 1)[1]
-    base = Path(settings.MEDIA_ROOT).resolve()
-    target = (base / relative).resolve()
-    if not target.is_relative_to(base) or not target.is_file():
+    try:
+        if not default_storage.exists(relative):
+            raise FileNotFoundError(relative)
+        if default_storage.size(relative) > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Question image must be smaller than 5 MB.")
+        with default_storage.open(relative, "rb") as handle:
+            content = handle.read()
+    except serializers.ValidationError:
+        raise
+    except Exception:
         raise serializers.ValidationError("Existing image could not be found.")
-    if target.stat().st_size > 5 * 1024 * 1024:
-        raise serializers.ValidationError("Question image must be smaller than 5 MB.")
-    return ContentFile(target.read_bytes(), name=target.name)
+    return ContentFile(content, name=Path(relative).name)
 
 
 class AnswerOptionPublicSerializer(serializers.ModelSerializer):

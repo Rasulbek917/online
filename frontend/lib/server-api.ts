@@ -5,8 +5,12 @@ export const SERVER_API_URL = normalise(
   process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000",
 );
 
+const vercelPublicHost =
+  process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || "";
+
 export const SITE_URL = normalise(
-  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+  process.env.NEXT_PUBLIC_SITE_URL ||
+    (vercelPublicHost ? `https://${vercelPublicHost}` : "http://localhost:3000"),
 );
 
 /** Convert a backend media URL into a public, same-site URL. */

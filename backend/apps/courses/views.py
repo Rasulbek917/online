@@ -417,6 +417,22 @@ class VideoStreamView(APIView):
             return HttpResponseForbidden(str(getattr(exc, "detail", "Access denied")))
         if not video.file:
             return HttpResponseForbidden("Video source not available.")
+        # Object storage (S3/R2) cannot stream through a serverless function:
+        # redirect to a short-lived presigned URL after the token check instead.
+        try:
+            signed_url = video.file.storage.url(
+                video.file.name,
+                parameters={"ResponseContentDisposition": "inline"},
+                expire=settings.VIDEO_SIGNED_URL_TTL,
+            )
+        except TypeError:
+            signed_url = None
+        if signed_url:
+            from django.http import HttpResponseRedirect
+
+            response = HttpResponseRedirect(signed_url)
+            response["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            return response
         path = Path(video.file.path)
         if not path.exists():
             raise Http404("Video file missing")

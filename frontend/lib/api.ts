@@ -186,21 +186,25 @@ export async function apiDownload(path: string, filename?: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+const LOCAL_BACKEND_HOSTS = ["localhost", "127.0.0.1", "backend"];
+
 export function mediaUrl(url: string | null | undefined) {
   if (!url) return null;
   if (/^https?:\/\//.test(url)) {
-    if (!API_URL) {
-      try {
-        const parsed = new URL(url);
+    try {
+      const parsed = new URL(url);
+      // Local backend media is proxied through the site origin. Object storage
+      // and CDN URLs must stay absolute.
+      if (!API_URL && LOCAL_BACKEND_HOSTS.includes(parsed.hostname)) {
         return `${parsed.pathname}${parsed.search}`;
-      } catch {
-        return url;
       }
+      if (typeof window !== "undefined" && API_URL.startsWith("https://") && url.startsWith("http://")) {
+        return url.replace(/^http:\/\//, "https://");
+      }
+      return url;
+    } catch {
+      return url;
     }
-    if (typeof window !== "undefined" && API_URL.startsWith("https://") && url.startsWith("http://")) {
-      return url.replace(/^http:\/\//, "https://");
-    }
-    return url;
   }
   return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }

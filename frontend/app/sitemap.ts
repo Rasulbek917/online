@@ -1,6 +1,10 @@
 import type { MetadataRoute } from "next";
 import { SERVER_API_URL, SITE_URL } from "@/lib/server-api";
 
+// The backend URL is a runtime service binding, so the sitemap cannot be
+// generated at build time.
+export const dynamic = "force-dynamic";
+
 interface SitemapCourse {
   slug: string;
   published_at: string | null;

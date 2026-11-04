@@ -26,8 +26,19 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-insecure-change-me-in-production")
-DEBUG = env_bool("DEBUG", True)
+DEBUG = env_bool("DEBUG", not bool(os.getenv("VERCEL")))
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
+
+# Vercel injects the deployment domains for both public and bound service calls.
+VERCEL_URL = os.getenv("VERCEL_URL", "").strip()
+VERCEL_PROJECT_PRODUCTION_URL = os.getenv("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
+_VERCEL_PUBLIC_HOST = VERCEL_PROJECT_PRODUCTION_URL or VERCEL_URL
+_VERCEL_PUBLIC_URL = f"https://{_VERCEL_PUBLIC_HOST}" if _VERCEL_PUBLIC_HOST else ""
+for _host in {VERCEL_URL, VERCEL_PROJECT_PRODUCTION_URL}:
+    if _host and _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+if _VERCEL_PUBLIC_HOST:
+    ALLOWED_HOSTS.append(".vercel.app")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -100,8 +111,9 @@ else:
                 "DATABASE_URL",
                 "postgres://itpark:itpark_dev_password@127.0.0.1:5434/itpark",
             ),
-            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "60")),
-            conn_health_checks=True,
+            # Serverless functions must not keep database connections alive.
+            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "0" if os.getenv("VERCEL") else "60")),
+            conn_health_checks=not bool(os.getenv("VERCEL")),
         )
     }
 
@@ -122,12 +134,46 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", BASE_DIR / "media"))
-STORAGES = {
-    "default": {
-        "BACKEND": os.getenv("DEFAULT_FILE_STORAGE", "django.core.files.storage.FileSystemStorage")
-    },
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage"},
+
+# Vercel has a read-only, ephemeral filesystem, so production media must live
+# in S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, ...).
+_STATIC_STORAGE = {
+    "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    if not DEBUG
+    else "django.contrib.staticfiles.storage.StaticFilesStorage"
 }
+_S3_BUCKET = os.getenv("AWS_STORAGE_BUCKET_NAME", "").strip()
+if _S3_BUCKET:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": _S3_BUCKET,
+                "access_key": os.getenv("AWS_S3_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID"),
+                "secret_key": os.getenv("AWS_S3_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY"),
+                "endpoint_url": os.getenv("AWS_S3_ENDPOINT_URL") or None,
+                "region_name": os.getenv("AWS_S3_REGION_NAME") or None,
+                "custom_domain": os.getenv("AWS_S3_CUSTOM_DOMAIN") or None,
+                "default_acl": None,
+                "file_overwrite": False,
+                "querystring_auth": env_bool("AWS_QUERYSTRING_AUTH", True),
+                "querystring_expire": int(os.getenv("AWS_QUERYSTRING_EXPIRE", "3600")),
+                "signature_version": os.getenv("AWS_S3_SIGNATURE_VERSION", "s3v4"),
+                "addressing_style": os.getenv("AWS_S3_ADDRESSING_STYLE", "virtual"),
+            },
+        },
+        "staticfiles": _STATIC_STORAGE,
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": os.getenv("DEFAULT_FILE_STORAGE", "django.core.files.storage.FileSystemStorage")
+        },
+        "staticfiles": _STATIC_STORAGE,
+    }
+
+# Presigned video URLs are short-lived because they are handed to the player.
+VIDEO_SIGNED_URL_TTL = int(os.getenv("VIDEO_SIGNED_URL_TTL", "900"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -187,12 +233,16 @@ CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000",
 )
+for _host in {VERCEL_URL, VERCEL_PROJECT_PRODUCTION_URL}:
+    _origin = f"https://{_host}" if _host else ""
+    if _origin and _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
 
 # ---------------------------------------------------------------------------
 # Integrations
 # ---------------------------------------------------------------------------
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", _VERCEL_PUBLIC_URL or "http://localhost:3000")
+BACKEND_URL = os.getenv("BACKEND_URL", _VERCEL_PUBLIC_URL or "http://localhost:8000")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
@@ -243,7 +293,8 @@ SINGLE_TEACHER_ENFORCED = env_bool("SINGLE_TEACHER_ENFORCED", True)
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
-CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", DEBUG)
+# Vercel runs no Celery worker or beat scheduler, so queue-triggered work runs inline.
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", DEBUG or bool(os.getenv("VERCEL")))
 CELERY_TASK_EAGER_PROPAGATES = DEBUG
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
