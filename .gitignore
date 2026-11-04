@@ -42,3 +42,6 @@ mobile/android/app/profile/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Generated video sources
+vibe_videos/
