@@ -7,7 +7,6 @@ from pathlib import Path
 import os
 
 import dj_database_url
-from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -113,12 +112,8 @@ if env_bool("USE_SQLITE", False):
     }
 else:
     if not DATABASE_URL:
-        if os.getenv("VERCEL"):
-            raise ImproperlyConfigured(
-                "DATABASE_URL is not set. Add a Postgres database to the Vercel project "
-                "(Storage -> Postgres/Neon) and expose DATABASE_URL or POSTGRES_URL to "
-                "the backend service for all environments."
-            )
+        # The Vercel build script skips migrations in this case. Attach a
+        # Postgres/Neon database and redeploy before using the API.
         DATABASE_URL = "postgres://itpark:itpark_dev_password@127.0.0.1:5434/itpark"
     DATABASES = {
         "default": dj_database_url.parse(
