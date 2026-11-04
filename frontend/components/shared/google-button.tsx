@@ -46,7 +46,12 @@ export function GoogleButton({ next }: { next?: string | null }) {
   // exact same Web client ID. Reading it from the public settings endpoint
   // keeps both sides in sync instead of relying on two env files.
   const settings = usePublicSettings();
-  const clientId = settings.data?.google_client_id?.trim() || "";
+  // The backend is the runtime source of truth, but the settings request can
+  // fail (cold start, database unavailable). Fall back to the build-time value
+  // so the button does not silently disappear after the loading spinner.
+  const clientId =
+    settings.data?.google_client_id?.trim() ||
+    (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
   const { googleLogin } = useAuth();
   const { t, lang } = useI18n();
   const router = useRouter();
@@ -110,7 +115,7 @@ export function GoogleButton({ next }: { next?: string | null }) {
     };
   }, [clientId, handleCredential, lang, t]);
 
-  if (settings.isLoading) {
+  if (!clientId && settings.isLoading) {
     return (
       <div className="flex min-h-11 w-full items-center justify-center rounded-xl border border-border bg-background/60">
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
