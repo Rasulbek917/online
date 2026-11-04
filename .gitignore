@@ -1,0 +1,44 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+key.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+backend/media/
+backend/staticfiles/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+tsconfig.tsbuildinfo
+
+# Flutter / Android
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins-dependencies
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/release/
+mobile/android/app/debug/
+mobile/android/app/profile/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

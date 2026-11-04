@@ -1,0 +1,174 @@
+name: itpark-academy
+
+x-backend-environment: &backend-environment
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+  DEBUG: ${DEBUG:-false}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+  DATABASE_URL: postgres://${POSTGRES_USER:-itpark}:${POSTGRES_PASSWORD:-itpark_dev_password}@db:5432/${POSTGRES_DB:-itpark}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  CELERY_TASK_ALWAYS_EAGER: "false"
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+  BACKEND_URL: ${BACKEND_URL:-http://localhost}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost}
+  AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+  AUTH_COOKIE_SAMESITE: Lax
+  SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-false}
+  PAYMENT_SANDBOX_ENABLED: ${PAYMENT_SANDBOX_ENABLED:-false}
+  EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+  EMAIL_HOST: ${EMAIL_HOST:-}
+  EMAIL_PORT: ${EMAIL_PORT:-587}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-IT PARK ACADEMY <noreply@itparkacademy.uz>}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-ITParkAcademyBot}
+  TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+  FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+  FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
+  FIREBASE_CREDENTIALS_FILE: ${FIREBASE_CREDENTIALS_FILE:-}
+  CLICK_SERVICE_ID: ${CLICK_SERVICE_ID:-}
+  CLICK_MERCHANT_ID: ${CLICK_MERCHANT_ID:-}
+  CLICK_SECRET_KEY: ${CLICK_SECRET_KEY:-}
+  CLICK_MERCHANT_USER_ID: ${CLICK_MERCHANT_USER_ID:-}
+  PAYME_MERCHANT_ID: ${PAYME_MERCHANT_ID:-}
+  PAYME_SECRET_KEY: ${PAYME_SECRET_KEY:-}
+  UZUM_API_KEY: ${UZUM_API_KEY:-}
+  UZUM_SERVICE_ID: ${UZUM_SERVICE_ID:-}
+  SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-itpark}
+      POSTGRES_USER: ${POSTGRES_USER:-itpark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-itpark_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-itpark} -d $${POSTGRES_DB:-itpark}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      RUN_MIGRATIONS: "true"
+      COLLECT_STATIC: "true"
+      SEED_DEMO: ${SEED_DEMO:-false}
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4)",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      <<: *backend-environment
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+    environment:
+      <<: *backend-environment
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        INTERNAL_API_URL: http://backend:8000
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/itpark.conf:/etc/nginx/conf.d/default.conf:ro
+      - media_data:/var/www/media:ro
+      - static_data:/var/www/static:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:
+  static_data:
