@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -97,6 +98,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # PostgreSQL is the primary database. SQLite is available only for quick local checks.
+# Vercel's Postgres/Neon integrations inject POSTGRES_URL (or DATABASE_URL).
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("POSTGRES_URL")
+    or os.getenv("POSTGRES_PRISMA_URL")
+)
 if env_bool("USE_SQLITE", False):
     DATABASES = {
         "default": {
@@ -105,12 +112,17 @@ if env_bool("USE_SQLITE", False):
         }
     }
 else:
+    if not DATABASE_URL:
+        if os.getenv("VERCEL"):
+            raise ImproperlyConfigured(
+                "DATABASE_URL is not set. Add a Postgres database to the Vercel project "
+                "(Storage -> Postgres/Neon) and expose DATABASE_URL or POSTGRES_URL to "
+                "the backend service for all environments."
+            )
+        DATABASE_URL = "postgres://itpark:itpark_dev_password@127.0.0.1:5434/itpark"
     DATABASES = {
         "default": dj_database_url.parse(
-            os.getenv(
-                "DATABASE_URL",
-                "postgres://itpark:itpark_dev_password@127.0.0.1:5434/itpark",
-            ),
+            DATABASE_URL,
             # Serverless functions must not keep database connections alive.
             conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "0" if os.getenv("VERCEL") else "60")),
             conn_health_checks=not bool(os.getenv("VERCEL")),
